@@ -59,10 +59,6 @@ export default class CopyWikilinkAnywherePlugin extends Plugin {
 				}
 
 				const selectedFile = files[0];
-				if (!selectedFile) {
-					return;
-				}
-
 				const markdownFile = this.toMarkdownFile(selectedFile);
 				if (!markdownFile) {
 					return;
@@ -80,7 +76,7 @@ export default class CopyWikilinkAnywherePlugin extends Plugin {
 		);
 	}
 
-	toMarkdownFile(file: TAbstractFile | null): TFile | null {
+	toMarkdownFile(file: TAbstractFile | null | undefined): TFile | null {
 		if (!(file instanceof TFile)) {
 			return null;
 		}
