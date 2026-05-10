@@ -1,99 +1,96 @@
-import {App, Editor, MarkdownView, Modal, Notice, Plugin} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
+import { Editor, Menu, Notice, Plugin, TAbstractFile, TFile } from 'obsidian';
 
-// Remember to rename these classes and interfaces!
-
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
-
+export default class CopyWikilinkAnywherePlugin extends Plugin {
 	async onload() {
-		await this.loadSettings();
-
-		// This creates an icon in the left ribbon.
-		this.addRibbonIcon('dice', 'Sample', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-
-		// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-		const statusBarItemEl = this.addStatusBarItem();
-		statusBarItemEl.setText('Status bar text');
-
-		// This adds a simple command that can be triggered anywhere
 		this.addCommand({
-			id: 'open-modal-simple',
-			name: 'Open modal (simple)',
-			callback: () => {
-				new SampleModal(this.app).open();
-			}
-		});
-		// This adds an editor command that can perform some operation on the current editor instance
-		this.addCommand({
-			id: 'replace-selected',
-			name: 'Replace selected content',
-			editorCallback: (editor: Editor, view: MarkdownView) => {
-				editor.replaceSelection('Sample editor command');
-			}
-		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
-		this.addCommand({
-			id: 'open-modal-complex',
-			name: 'Open modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
+			id: 'copy-wikilink-for-active-file',
+			name: 'Copy wikilink for active file',
+			callback: async () => {
+				const file = this.getActiveMarkdownFile();
+				if (!file) {
+					new Notice('No active Markdown file to copy wikilink for.');
+					return;
 				}
-				return false;
-			}
+
+				await this.copyWikiLink(file);
+			},
 		});
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+		this.registerEvent(
+			this.app.workspace.on('file-menu', (menu: Menu, file: TAbstractFile) => {
+				const markdownFile = this.toMarkdownFile(file);
+				if (!markdownFile) {
+					return;
+				}
 
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			new Notice("Click");
-		});
+				menu.addItem((item) =>
+					item
+						.setTitle('Copy wikilink')
+						.setIcon('link')
+						.onClick(async () => {
+							await this.copyWikiLink(markdownFile);
+						}),
+				);
+			}),
+		);
 
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
+		this.registerEvent(
+			this.app.workspace.on('editor-menu', (menu: Menu, _editor: Editor) => {
+				const activeFile = this.getActiveMarkdownFile();
+				if (!activeFile) {
+					return;
+				}
 
+				menu.addItem((item) =>
+					item
+						.setTitle('Copy wikilink')
+						.setIcon('link')
+						.onClick(async () => {
+							await this.copyWikiLink(activeFile);
+						}),
+				);
+			}),
+		);
+
+		this.registerEvent(
+			this.app.workspace.on('files-menu', (menu: Menu, files: TAbstractFile[]) => {
+				if (files.length !== 1) {
+					return;
+				}
+
+				const selectedFile = files[0];
+				const markdownFile = this.toMarkdownFile(selectedFile);
+				if (!markdownFile) {
+					return;
+				}
+
+				menu.addItem((item) =>
+					item
+						.setTitle('Copy wikilink')
+						.setIcon('link')
+						.onClick(async () => {
+							await this.copyWikiLink(markdownFile);
+						}),
+				);
+			}),
+		);
 	}
 
-	onunload() {
+	toMarkdownFile(file: TAbstractFile | null | undefined): TFile | null {
+		if (!(file instanceof TFile)) {
+			return null;
+		}
+
+		return file.extension === 'md' ? file : null;
 	}
 
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+	getActiveMarkdownFile(): TFile | null {
+		return this.toMarkdownFile(this.app.workspace.getActiveFile());
 	}
 
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
+	async copyWikiLink(file: TFile): Promise<void> {
+		const wikiLink = `[[${file.basename}]]`;
+		await navigator.clipboard.writeText(wikiLink);
+		new Notice(`Copied wikilink: ${wikiLink}`);
 	}
 }
